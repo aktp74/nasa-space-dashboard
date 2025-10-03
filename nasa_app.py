@@ -8,73 +8,33 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
 import webbrowser
-
-# =========================
-# 🛠️ PDF Library Compatibility
-# =========================
-try:
-    import pypdf  # Modern library
-    PyPDF2 = pypdf  # Alias untuk compatibility
-except ImportError:
-    import PyPDF2  # Fallback ke legacy library
-
+import PyPDF2
 import docx
+import streamlit.components.v1 as components 
+
+if 'show_similarity_graph' not in st.session_state:
+    st.session_state.show_similarity_graph = False
+if 'show_knowledge_graph' not in st.session_state:
+    st.session_state.show_knowledge_graph = False
 
 # =========================
-# 📊 Data Loading dengan Error Handling
+# 🎨 Background Image Setup
 # =========================
-@st.cache_data
-def load_data():
-    try:
-        df = pd.read_csv("SB_publication_PMC.csv", encoding="latin1")
-        df.columns = [c.lower() for c in df.columns]
-        st.sidebar.success(f"✅ Loaded {len(df)} publications")
-        return df
-    except FileNotFoundError:
-        st.error("❌ Data file 'SB_publication_PMC.csv' not found!")
-        # Return sample empty dataframe untuk testing
-        return pd.DataFrame({
-            'title': ['Sample Publication 1', 'Sample Publication 2'],
-            'year': [2023, 2024],
-            'abstract': ['Sample abstract text 1', 'Sample abstract text 2'],
-            'conclusion': ['Sample conclusion 1', 'Sample conclusion 2'],
-            'link': ['https://example.com/1', 'https://example.com/2']
-        })
-    except Exception as e:
-        st.error(f"❌ Error loading data: {str(e)}")
-        return pd.DataFrame()
-
-df = load_data()
-
 # =========================
-# 🛠️ Initialize Session State
+# 🎨 Sidebar Background (Deep Space Gradient)
 # =========================
-if 'hf_api_key' not in st.session_state:
-    st.session_state.hf_api_key = os.getenv('HF_API_KEY', '')
-
-# =========================
-# 🎨 Background Setup dengan Error Handling
-# =========================
-def get_base64_of_bin_file(bin_file):
-    try:
-        with open(bin_file, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except Exception as e:
-        st.sidebar.warning(f"⚠️ Error loading {bin_file}: {str(e)}")
-        return None
-
-# Sidebar Styling
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0c0e2e 0%, #1a237e 50%, #283593 100%);
     }
     
+    /* Untuk pastikan text dalam sidebar kelihatan jelas */
     .sidebar-content {
         color: #ffffff;
     }
     
+    /* Improve button visibility dalam sidebar */
     .stButton > button {
         color: #00ffff;
         border: 1px solid #00ffff;
@@ -87,197 +47,145 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
-# Background Image
 img_file = "background.jpg"
 if os.path.exists(img_file):
     img_base64 = get_base64_of_bin_file(img_file)
-    if img_base64:
-        page_bg = f"""
-        <style>
-        [data-testid="stAppViewContainer"] {{
-            background-image: url("data:image/jpg;base64,{img_base64}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }}
 
-        [data-testid="stHeader"] {{
-            background: rgba(0, 0, 0, 0);
-        }}
+    page_bg = f"""
+    <style>
+    /* Background Image */
+    [data-testid="stAppViewContainer"] {{
+        background-image: url("data:image/jpg;base64,{img_base64}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+    }}
 
-        .block-container {{
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 20px;
-            padding: 25px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 200, 255, 0.5);
-            box-shadow: 0 0 15px rgba(0, 200, 255, 0.25);
-            color: #f0faff;
-            transition: all 0.3s ease-in-out;
-        }}
+    [data-testid="stHeader"] {{
+        background: rgba(0, 0, 0, 0);
+    }}
 
-        .block-container:hover {{
-            border: 1px solid rgba(0, 255, 255, 0.9);
-            box-shadow: 0 0 25px rgba(0, 255, 255, 0.6);
-            transform: translateY(-3px);
-        }}
+    /* Glassmorphism + Neon Border */
+    .block-container {{
+        background: rgba(255, 255, 255, 0.08);   /* semi-transparent glass */
+        border-radius: 20px;
+        padding: 25px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(0, 200, 255, 0.5);  /* neon border */
+        box-shadow: 0 0 15px rgba(0, 200, 255, 0.25);  /* glowing shadow */
+        color: #f0faff;  /* soft text color */
+        transition: all 0.3s ease-in-out;
+    }}
 
-        h1, h2, h3, h4 {{
-            color: #1a3c34;
-        }}
-        </style>
-        """
-        st.markdown(page_bg, unsafe_allow_html=True)
-else:
-    st.sidebar.info("ℹ️ background.jpg not found - using default background")
+    /* Hover Effect */
+    .block-container:hover {{
+        border: 1px solid rgba(0, 255, 255, 0.9);
+        box-shadow: 0 0 25px rgba(0, 255, 255, 0.6);
+        transform: translateY(-3px);   /* floating effect */
+    }}
 
-# Background Music
+    /* Headings */
+    h1, h2, h3, h4 {{
+        color: #1a3c34;
+    }}
+    </style>
+    """
+
+    st.markdown(page_bg, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =========================
+# 🎵 Background Music Setup
+# =========================
 music_file = "background.mp3"
 if os.path.exists(music_file):
-    try:
-        with open(music_file, "rb") as f:
-            audio_bytes = f.read()
-        b64 = base64.b64encode(audio_bytes).decode()
-        md_audio = f"""
-        <audio id="bg-music" autoplay loop hidden>
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            Your browser does not support the audio element.
-        </audio>
-        <script>
-            var audio = document.getElementById("bg-music");
-            audio.volume = 0.2;
-        </script>
-        """
-        st.markdown(md_audio, unsafe_allow_html=True)
-    except Exception as e:
-        st.sidebar.warning(f"⚠️ Error loading music: {str(e)}")
+    with open(music_file, "rb") as f:
+        audio_bytes = f.read()
+    b64 = base64.b64encode(audio_bytes).decode()
+
+    md_audio = f"""
+    <audio id="bg-music" autoplay loop hidden>
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+    <script>
+        var audio = document.getElementById("bg-music");
+        audio.volume = 0.2;
+    </script>
+    """
+    st.markdown(md_audio, unsafe_allow_html=True)
 else:
-    st.sidebar.info("ℹ️ background.mp3 not found")
+    st.sidebar.warning("⚠️ background.mp3 tidak dijumpai. Letak fail ini dalam folder sama dengan app.py")
 
 # =========================
-# 🤖 AI Summarizer - FREE VERSION
+# 📊 Data Loading
 # =========================
-def try_hugging_face(text, mode):
-    """Try Hugging Face Inference API - FREE"""
-    try:
-        API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
-        
-        hf_token = st.session_state.hf_api_key or os.getenv('HF_API_KEY', '')
-        
-        if not hf_token:
-            return "❌ No Hugging Face token configured"
-            
-        headers = {"Authorization": f"Bearer {hf_token}"}
-        
-        input_text = text[:1024]  # Limit length
-        
-        payload = {
-            "inputs": input_text,
-            "parameters": {
-                "max_length": 300 if mode == "single" else 500,
-                "min_length": 100 if mode == "single" else 200,
-                "do_sample": False
-            }
-        }
-        
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0]['summary_text']
-            else:
-                return "❌ Hugging Face: No summary generated"
-        elif response.status_code == 503:
-            return "❌ Hugging Face: Model is loading, please try again in 30 seconds"
-        elif response.status_code == 401:
-            return "❌ Hugging Face: Invalid token"
-        else:
-            return f"❌ Hugging Face API error: {response.status_code}"
-        
-    except Exception as e:
-        return f"❌ Hugging Face: {str(e)}"
+@st.cache_data
+def load_data():
+    df = pd.read_csv("SB_publication_PMC.csv", encoding="latin1")
+    df.columns = [c.lower() for c in df.columns]
+    return df
 
+df = load_data()
+
+# =========================
+# 🤖 AI Summarizer
+# =========================
 def ai_summarize(text, max_tokens=400, mode="single"):
-    """Free AI summarization using multiple fallback options"""
-    # Option 1: Try Hugging Face Inference API (FREE) - PRIORITY
-    hf_result = try_hugging_face(text, mode)
-    if hf_result and not hf_result.startswith("❌"):
-        return hf_result
-    
-    # Option 2: Try OpenRouter as backup (jika ada API key)
     api_key = os.getenv("OPENROUTER_API_KEY")
-    if api_key:
-        try:
-            url = "https://openrouter.ai/api/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://your-site.com",
-                "X-Title": "NASA Space Bioscience Dashboard"
-            }
+    if not api_key:
+        return "❌ API key OpenRouter tidak dijumpai. Sila set dulu."
 
-            if mode == "overview":
-                user_prompt = f"""Buat summary komprehensif dalam English untuk koleksi artikel NASA space bioscience. 
-                Fokus pada tema utama, penemuan penting, dan research trends.
-                
-                Text: {text[:3000]}"""
-            else:
-                user_prompt = f"""Summarize this NASA space research article in 5-7 sentences in English:
-                
-                {text[:2000]}"""
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
 
-            available_models = [
-                "anthropic/claude-3-haiku",
-                "google/gemini-pro",
-                "meta-llama/llama-3-8b-instruct",
-                "microsoft/wizardlm-2-8x22b"
-            ]
-            
-            for model in available_models:
-                try:
-                    data = {
-                        "model": model,
-                        "messages": [
-                            {
-                                "role": "system", 
-                                "content": "You are a scientific research assistant that summarizes NASA space bioscience articles clearly in English."
-                            },
-                            {
-                                "role": "user", 
-                                "content": user_prompt
-                            }
-                        ],
-                        "max_tokens": max_tokens,
-                    }
+    if mode == "overview":
+        user_prompt = f"""
+Below is a collection of abstracts and conclusions from multiple NASA space bioscience articles.
+Your task: Write a comprehensive overview summary (5–10 paragraphs) in English.
+Focus on major themes, key findings, knowledge gaps, and overall research trends.
+Do not list each article one by one.
 
-                    response = requests.post(url, headers=headers, json=data, timeout=30)
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        return result["choices"][0]["message"]["content"]
-                    elif response.status_code == 404:
-                        continue
-                    elif response.status_code == 402:
-                        return "❌ OpenRouter: Payment required. Please add credits or use Hugging Face."
-                        
-                except Exception:
-                    continue
-                    
-            return "❌ OpenRouter: No working models found."
-            
-        except Exception as e:
-            return f"❌ OpenRouter Error: {str(e)}"
-    
-    # Final fallback - rule based summary
-    return fallback_summarize(text, mode)
+Text:
+{text}
+"""
+    else:
+        user_prompt = f"Summarize this article in 5–7 sentences, in English:\n\n{text}"
 
+    data = {
+        "model": "openrouter/auto",
+        "messages": [
+            {"role": "system", "content": "You are an AI that summarizes scientific articles clearly in English."},
+            {"role": "user", "content": user_prompt}
+        ],
+        "max_tokens": max_tokens,
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"❌ Ralat AI: {e}"
+# =========================
+# 🆕 SMART SUMMARIZE FUNCTIONS - TAMBAH INI
+# =========================
 def smart_summarize(text, max_tokens=400, mode="single"):
     """Smart summarization dengan fallback"""
+    # Cuba AI dulu
     ai_result = ai_summarize(text, max_tokens, mode)
     
+    # Jika AI gagal, guna fallback
     if ai_result.startswith("❌"):
         st.sidebar.warning("AI summarization failed. Using rule-based fallback.")
         return fallback_summarize(text, mode)
@@ -291,55 +199,48 @@ def fallback_summarize(text, mode="single"):
         return text
     
     if mode == "overview":
+        # Ambil 8-10 sentences untuk overview
         key_sentences = sentences[:3] + sentences[len(sentences)//2:len(sentences)//2+3] + sentences[-3:]
         return ". ".join(key_sentences) + "."
     else:
+        # Ambil 5-7 sentences untuk single article
         return ". ".join(sentences[:5]) + "."
-
 # =========================
 # 📑 PDF/DOCX Reader + AI Feedback
 # =========================
 def extract_text_from_pdf(file):
-    """Extract text from PDF file"""
-    try:
-        # Gunakan library yang available
-        if 'pypdf' in globals():
-            reader = pypdf.PdfReader(file)
-        else:
-            reader = PyPDF2.PdfReader(file)
-            
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
-    except Exception as e:
-        st.error(f"❌ Error extracting PDF text: {str(e)}")
-        return ""
+    reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() + "\n"
+    return text
 
 def extract_text_from_docx(file):
-    """Extract text from DOCX file"""
-    try:
-        doc = docx.Document(file)
-        return "\n".join([para.text for para in doc.paragraphs])
-    except Exception as e:
-        st.error(f"❌ Error extracting DOCX text: {str(e)}")
-        return ""
+    doc = docx.Document(file)
+    return "\n".join([para.text for para in doc.paragraphs])
 
 def ai_comment_on_report(report_text, corpus_texts):
-    """Analyze report similarity dengan NASA publications"""
+    vectorizer = TfidfVectorizer(stop_words="english")
+    tfidf = vectorizer.fit_transform([report_text] + corpus_texts)
+    sims = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+    most_similar_idx = sims.argmax()
+    score = sims[most_similar_idx]
+    related_paper = df.iloc[most_similar_idx]["title"]
+    return f"Closest related article: **{related_paper}** (similarity score {score:.2f})."
+
+def search_nasa_osdr_videos(query, max_results=3):
+    """
+    Search for related videos from NASA OSDR database
+    """
     try:
-        vectorizer = TfidfVectorizer(stop_words="english", max_features=1000)
-        tfidf = vectorizer.fit_transform([report_text] + corpus_texts)
-        sims = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
-        most_similar_idx = sims.argmax()
-        score = sims[most_similar_idx]
-        related_paper = df.iloc[most_similar_idx]["title"] if most_similar_idx < len(df) else "Unknown"
-        return f"Closest related article: **{related_paper}** (similarity score {score:.2f})."
+        return get_simulated_osdr_videos(query, max_results)
     except Exception as e:
-        return f"Error in similarity analysis: {str(e)}"
+        return get_simulated_osdr_videos(query, max_results)
 
 def get_simulated_osdr_videos(query, max_results=3):
-    """Simulated NASA OSDR video data untuk demonstration"""
+    """
+    Simulated NASA OSDR video data untuk demonstration
+    """
     video_database = {
         "microgravity": [
             {
@@ -395,87 +296,74 @@ def get_simulated_osdr_videos(query, max_results=3):
 # 🌐 Graph Functions
 # =========================
 def build_knowledge_graph(df, max_nodes=50):
-    """Build knowledge graph and return as HTML string"""
-    try:
-        G = nx.Graph()
-        for idx, row in df.head(max_nodes).iterrows():
-            article = f"📄 {row['title'][:40]}..." if 'title' in row else f"Article {idx}"
-            G.add_node(article, color="lightblue", size=20)
-            if "abstract" in row and pd.notna(row["abstract"]):
-                words = str(row["abstract"]).split()
-                keywords = [w for w in words if len(w) > 6][:5]
-                for kw in keywords:
-                    G.add_node(kw, color="lightgreen", size=15)
-                    G.add_edge(article, kw)
-        
-        net = Network(height="600px", width="100%", bgcolor="#0d1b2a", font_color="white")
-        net.from_nx(G)
-        net.force_atlas_2based()
-        
-        html_content = net.generate_html()
-        html_content = html_content.replace('cdnjs.cloudflare.com', '')
-        html_content = html_content.replace('cdn.jsdelivr.net', '')
-        
-        return html_content
-        
-    except Exception as e:
-        return f"<p style='color: white;'>Error creating graph: {str(e)}</p>"
+    G = nx.Graph()
+    for idx, row in df.head(max_nodes).iterrows():
+        article = f"📄 {row['title'][:40]}..."
+        G.add_node(article, color="lightblue", size=20)
+        if "abstract" in row and pd.notna(row["abstract"]):
+            words = str(row["abstract"]).split()
+            keywords = [w for w in words if len(w) > 6][:5]
+            for kw in keywords:
+                G.add_node(kw, color="lightgreen", size=15)
+                G.add_edge(article, kw)
+    return G
 
 def build_similarity_graph(df, max_nodes=30, top_k=3):
-    """Build similarity graph and return as HTML string"""
+    G = nx.Graph()
+    subset = df.head(max_nodes).copy()
+    subset["text"] = subset["abstract"].fillna("") + " " + subset["conclusion"].fillna("")
+    vectorizer = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = vectorizer.fit_transform(subset["text"])
+    sim_matrix = cosine_similarity(tfidf_matrix)
+    for i, row in subset.iterrows():
+        art_i = f"📄 {row['title'][:40]}..."
+        G.add_node(art_i, color="orange", size=20)
+        similar_idx = sim_matrix[i - subset.index[0]].argsort()[-top_k-1:-1]
+        for j in similar_idx:
+            art_j = f"📄 {subset.iloc[j]['title'][:40]}..."
+            sim_score = sim_matrix[i - subset.index[0], j]
+            if sim_score > 0.1:
+                G.add_edge(art_i, art_j, weight=sim_score)
+    return G
+def display_knowledge_graph_online(df):
+    """Fungsi baru untuk display graph dalam Streamlit online"""
     try:
-        G = nx.Graph()
-        subset = df.head(max_nodes).copy()
-        subset["text"] = subset["abstract"].fillna("") + " " + subset["conclusion"].fillna("")
+        # Build graph
+        G = build_knowledge_graph(df, max_nodes=30)
         
-        vectorizer = TfidfVectorizer(stop_words="english", max_features=500)
-        tfidf_matrix = vectorizer.fit_transform(subset["text"])
-        sim_matrix = cosine_similarity(tfidf_matrix)
-        
-        for i, row in subset.iterrows():
-            art_i = f"📄 {row['title'][:40]}..." if 'title' in row else f"Article {i}"
-            G.add_node(art_i, color="orange", size=20)
-            similar_idx = sim_matrix[i].argsort()[-top_k-1:-1]
-            for j in similar_idx:
-                art_j = f"📄 {subset.iloc[j]['title'][:40]}..." if 'title' in subset.iloc[j] else f"Article {j}"
-                sim_score = sim_matrix[i, j]
-                if sim_score > 0.1:
-                    G.add_edge(art_i, art_j, weight=sim_score)
-        
+        # Create Pyvis network
         net = Network(height="600px", width="100%", bgcolor="#0d1b2a", font_color="white")
         net.from_nx(G)
-        net.force_atlas_2based()
         
+        # Generate HTML content
         html_content = net.generate_html()
-        html_content = html_content.replace('cdnjs.cloudflare.com', '')
-        html_content = html_content.replace('cdn.jsdelivr.net', '')
         
-        return html_content
+        # Display dalam Streamlit menggunakan components
+        components.html(html_content, height=600, scrolling=True)
         
+        return True
     except Exception as e:
-        return f"<p style='color: white;'>Error creating graph: {str(e)}</p>"
-
-# =========================
-# 🛠️ AI Services Test Function
-# =========================
-def test_ai_services():
-    """Test AI service connectivity"""
-    try:
-        if hasattr(st.session_state, 'hf_api_key') and st.session_state.hf_api_key:
-            st.sidebar.success("✅ Hugging Face token configured")
-            return True
-        else:
-            st.sidebar.warning("⚠️ No Hugging Face token found")
-            return False
-    except Exception as e:
-        st.sidebar.error(f"❌ Service test failed: {str(e)}")
+        st.error(f"❌ Error generating graph: {e}")
         return False
 
+def display_similarity_graph_online(df):
+    """Fungsi untuk similarity graph"""
+    try:
+        G = build_similarity_graph(df, max_nodes=20)
+        net = Network(height="600px", width="100%", bgcolor="#0d1b2a", font_color="white")
+        net.from_nx(G)
+        html_content = net.generate_html()
+        components.html(html_content, height=600, scrolling=True)
+        return True
+    except Exception as e:
+        st.error(f"❌ Error generating similarity graph: {e}")
+        return False
 # =========================
 # 🖥️ Main UI
 # =========================
 st.markdown("""
 <style>
+    /* Header styling */
     .main-header {
         text-align: center;
         background: linear-gradient(135deg, rgba(13, 59, 102, 0.8) 0%, rgba(30, 110, 167, 0.8) 50%, rgba(42, 157, 143, 0.8) 100%);
@@ -487,6 +375,7 @@ st.markdown("""
         backdrop-filter: blur(10px);
     }
     
+    /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: rgba(255, 255, 255, 0.05);
@@ -519,6 +408,7 @@ st.markdown("""
         border: 1px solid #00f5ff;
     }
     
+    /* Content area improvement */
     .main-content {
         background: rgba(255, 255, 255, 0.02);
         border-radius: 15px;
@@ -536,7 +426,7 @@ def get_logo_base64(logo_file):
         return base64.b64encode(data).decode()
     return None
 
-logo_file = "team_logo.png"
+logo_file = "team_logo.png"  # Ganti dengan nama file logo anda
 if os.path.exists(logo_file):
     logo_base64 = get_logo_base64(logo_file)
     logo_img = f'<img src="data:image/png;base64,{logo_base64}" class="team-logo" alt="Team Logo">'
@@ -579,14 +469,13 @@ st.markdown(f"""
         {logo_img}
     </div>
     <div style="display: flex; justify-content: center; gap: 20px; color: #e0f7fa;">
-        <span>📊 <strong>{len(df)}</strong> Publications</span>
+        <span>📊 <strong>608</strong> Publications</span>
         <span>🔬 <strong>12+</strong> Research Fields</span>
         <span>🤖 <strong>AI-Powered</strong> Analysis</span>
         <span>🚀 <strong>NASA</strong> Curated</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
-
 # Enhanced Tabs
 tabs = st.tabs(["🔍 **SEARCH & ANALYZE**", "📑 **UPLOAD & COMPARE**"])
 
@@ -595,6 +484,7 @@ st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
 # --- TAB 1: Search Publications ---
 with tabs[0]:
+    # Enhanced Search Header
     st.markdown("""
     <div style="
         background: linear-gradient(135deg, rgba(13, 59, 102, 0.8) 0%, rgba(30, 110, 167, 0.6) 100%);
@@ -606,14 +496,16 @@ with tabs[0]:
     ">
         <h2 style="color: #00f5ff; margin: 0; text-align: center;">🔍 Advanced Publication Search</h2>
         <p style="color: #e0f7fa; text-align: center; margin: 10px 0 0 0;">
-            Explore {len(df)}+ NASA Space Bioscience Publications with AI-Powered Analysis
+            Explore 608+ NASA Space Bioscience Publications with AI-Powered Analysis
         </p>
     </div>
-    """.format(len(df)), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
+    # Main Content Columns
     col_stats, col_search = st.columns([1, 2])
 
     with col_stats:
+        # Statistics Panel
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.05);
@@ -624,7 +516,7 @@ with tabs[0]:
         ">
             <h4 style="color: #00f5ff; margin-top: 0;">📈 Publication Analytics</h4>
             <div style="color: #e0f7fa; line-height: 2;">
-                📚 <strong>Total Articles:</strong> {len(df)}<br>
+                📚 <strong>Total Articles:</strong> 608<br>
                 📅 <strong>Years Covered:</strong> 1990-2024<br>
                 🔬 <strong>Research Fields:</strong> 12+<br>
                 🌟 <strong>Featured Topics:</strong><br>
@@ -635,9 +527,10 @@ with tabs[0]:
                 🤖 <strong>AI Tools:</strong> Available
             </div>
         </div>
-        """.format(len(df)), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
     with col_search:
+        # Search Control Panel
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.08);
@@ -650,22 +543,23 @@ with tabs[0]:
         </div>
         """, unsafe_allow_html=True)
         
-        # Year Filter
-        years = sorted(df["year"].dropna().unique()) if 'year' in df.columns else [2023, 2024]
+        # Year Filter dengan design yang lebih baik
+        years = sorted(df["year"].dropna().unique())
         selected_years = st.multiselect(
             "**🗓️ Filter by Publication Years:**",
             years, 
-            default=years[-5:] if len(years) > 5 else years,
+            default=years[-5:],
             help="Select specific years to focus your search"
         )
         
-        # Search Input
+        # Search Input yang lebih prominent
         query = st.text_input(
             "**🔍 Search Keywords:**",
             placeholder="Enter title, abstract, or conclusion keywords...",
             help="Search across article titles, abstracts, and conclusions"
         )
         
+        # Quick Search Tips
         with st.expander("💡 **Search Tips**", expanded=False):
             st.markdown("""
             - Use **specific terms**: "microgravity effects on cells"
@@ -674,13 +568,14 @@ with tabs[0]:
             - Use **boolean operators**: "Mars AND habitat"
             """)
 
-    # Results Section
+    # Results Section - HANYA SATU BAHAGIAN INI SAHAJA
     if query:
-        df_filtered = df[df["year"].isin(selected_years)] if selected_years and 'year' in df.columns else df
+        df_filtered = df[df["year"].isin(selected_years)] if selected_years else df
         results = df_filtered[df_filtered.astype(str)
                               .apply(lambda x: x.str.contains(query, case=False, na=False))
                               .any(axis=1)]
         
+        # Results Header
         st.markdown(f"""
         <div style="
             background: rgba(0, 245, 255, 0.1);
@@ -698,6 +593,7 @@ with tabs[0]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Kekalkan for loop articles yang sudah diubah (dengan warna)
         for idx, row in results.head(20).iterrows():
             colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FECA57", "#FF9FF3", "#54A0FF", "#5F27CD"]
             current_color = colors[idx % len(colors)]
@@ -712,7 +608,7 @@ with tabs[0]:
                 box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
                 transition: all 0.3s ease;
             ">
-                <h3 style="color: {current_color}; margin: 0 0 10px 0;">📄 {row['title'] if 'title' in row else 'Untitled'}</h3>
+                <h3 style="color: {current_color}; margin: 0 0 10px 0;">📄 {row['title']}</h3>
                 <div style="color: #e0f7fa; font-size: 0.9em; margin-bottom: 15px;">
                     🗓️ <strong>Year:</strong> {row['year'] if 'year' in row and pd.notna(row['year']) else 'N/A'} 
                     | 🔗 <strong>Access:</strong> {'Available' if 'link' in row and pd.notna(row['link']) else 'Not available'}
@@ -720,6 +616,7 @@ with tabs[0]:
             </div>
             """, unsafe_allow_html=True)
 
+            # Content kekal sama seperti sebelumnya
             if "link" in row and pd.notna(row["link"]):
                 st.markdown(f"**🌐 Full Article:** [{row['link']}]({row['link']})")
 
@@ -731,13 +628,14 @@ with tabs[0]:
                 with st.expander("📌 **Conclusion**", expanded=False):
                     st.write(row["conclusion"])
 
-            # Video Section
+            # 🎬 VIDEO SECTION - UPDATED VERSION (PASTI NAMPAK)
             st.markdown("---")
             st.markdown("#### 🎬 **NASA Video Resources**")
             
+            # Create columns for better layout
             col1, col2 = st.columns(2)
             
-            title_lower = str(row['title']).lower() if 'title' in row else ""
+            title_lower = row['title'].lower()
             
             with col1:
                 if "microgravity" in title_lower:
@@ -761,63 +659,33 @@ with tabs[0]:
             
             with col2:
                 if st.button("📹 Search More Videos", key=f"search_{idx}", use_container_width=True):
-                    search_url = f"https://www.youtube.com/results?search_query=NASA+{str(row['title']).replace(' ', '+') if 'title' in row else 'space'}"
+                    search_url = f"https://www.youtube.com/results?search_query=NASA+{row['title'].replace(' ', '+')}"
                     webbrowser.open(search_url)
 
-            # AI Summary Button
+            # Enhanced AI Summary Button
             if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):
                 text_to_summarize = ""
                 if "abstract" in row and pd.notna(row["abstract"]):
                     text_to_summarize += f"Abstract:\n{row['abstract']}\n\n"
                 if "conclusion" in row and pd.notna(row["conclusion"]):
                     text_to_summarize += f"Conclusion:\n{row['conclusion']}\n\n"
-                
                 if text_to_summarize:
-                    hf_configured = hasattr(st.session_state, 'hf_api_key') and st.session_state.hf_api_key
-                    
-                    if not hf_configured:
-                        st.error("""
-                        🔧 **AI Service Not Configured**
-                        
-                        **Langkah penyelesaian:**
-                        1. **Dapatkan FREE token** dari [Hugging Face](https://huggingface.co/settings/tokens)
-                        2. **Expand "🔑 Free API Setup"** di sidebar  
-                        3. **Paste token** dalam text box
-                        4. **Tekan Enter**
-                        5. **Klik button ini semula**
-                        
-                        ⏱️ Token akan berfungsi serta-merta!
-                        """)
-                    else:
-                        with st.spinner("🤖 Generating AI summary using Hugging Face..."):
-                            summary = smart_summarize(text_to_summarize, mode="single")
-                        
-                        if summary.startswith("❌"):
-                            st.error(f"**AI Summary Failed:** {summary}")
-                            st.info("""
-                            **Troubleshooting:**
-                            - Pastikan token Hugging Face betul
-                            - Token perlu permission **"Write"**
-                            - Cuba token yang lain
-                            """)
-                        else:
-                            st.success("✅ AI Summary Generated!")
-                            st.markdown(f"""
-                            <div style="
-                                background: rgba(0, 100, 150, 0.3);
-                                border-radius: 10px;
-                                padding: 15px;
-                                margin: 15px 0;
-                                border-left: 4px solid #00FFFF;
-                            ">
-                                <strong style="color: #00f5ff;">🤖 AI Summary:</strong><br>
-                                <span style="color: #e0f7fa;">{summary}</span>
-                            </div>
-                            """, unsafe_allow_html=True)
+                    summary = ai_summarize(text_to_summarize, mode="single")
+                    st.markdown(f"""
+                    <div style="
+                        background: rgba(0, 100, 150, 0.3);
+                        border-radius: 10px;
+                        padding: 15px;
+                        margin: 15px 0;
+                        border-left: 4px solid #00FFFF;
+                    ">
+                        <strong style="color: #00f5ff;">🤖 AI Summary:</strong><br>
+                        <span style="color: #e0f7fa;">{summary}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
 
             st.markdown("---")
-        
-        # Summarize All Button
+# Summarize All Button
         if len(results) > 1:
             if st.button("🧠 **Generate Comprehensive Summary**", use_container_width=True):
                 all_text = ""
@@ -829,17 +697,46 @@ with tabs[0]:
                 
                 if all_text.strip():
                     with st.spinner("🤖 Generating comprehensive summary..."):
+                        # Guna smart_summarize instead of ai_summarize
                         summary_all = smart_summarize(all_text, max_tokens=800, mode="overview")
                     
                     with st.expander("📋 **Comprehensive Research Overview**", expanded=True):
                         if summary_all.startswith("❌"):
                             st.error(summary_all)
-                            st.info("💡 **Tip**: Sila check API configuration anda.")
+                            st.info("💡 **Tip**: Sila check OpenRouter API key dan kredit balance anda.")
                         else:
                             st.markdown(summary_all)
+def smart_summarize(text, max_tokens=400, mode="single"):
+    """Smart summarization dengan fallback"""
+    # Cuba AI dulu
+    ai_result = ai_summarize(text, max_tokens, mode)
+    
+    # Jika AI gagal, guna fallback
+    if ai_result.startswith("❌"):
+        st.sidebar.warning("AI summarization failed. Using rule-based fallback.")
+        return fallback_summarize(text, mode)
+    
+    return ai_result
 
+def fallback_summarize(text, mode="single"):
+    """Simple rule-based summarization sebagai backup"""
+    sentences = text.split('. ')
+    if len(sentences) <= 5:
+        return text
+    
+    if mode == "overview":
+        # Ambil 8-10 sentences untuk overview
+        key_sentences = sentences[:3] + sentences[len(sentences)//2:len(sentences)//2+3] + sentences[-3:]
+        return ". ".join(key_sentences) + "."
+    else:
+        # Ambil 5-7 sentences untuk single article
+        return ". ".join(sentences[:5]) + "."
+        
+        
+       
 # --- TAB 2: Upload Report ---
 with tabs[1]:
+    # Enhanced Upload Header
     st.markdown("""
     <div style="
         background: linear-gradient(135deg, rgba(42, 157, 143, 0.8) 0%, rgba(30, 110, 167, 0.6) 100%);
@@ -857,9 +754,11 @@ with tabs[1]:
     </div>
     """, unsafe_allow_html=True)
 
+    # Main Upload Layout
     col_upload, col_features = st.columns([2, 1])
 
     with col_upload:
+        # Upload Section dengan design yang lebih baik
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.05);
@@ -873,12 +772,14 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Enhanced File Uploader
         uploaded_file = st.file_uploader(
             "**Choose PDF or DOCX File**", 
             type=["pdf", "docx"],
             help="Upload your research paper, thesis, or report for AI analysis"
         )
         
+        # File Requirements Info
         st.markdown("""
         <div style="
             background: rgba(42, 157, 143, 0.1);
@@ -896,6 +797,7 @@ with tabs[1]:
         """, unsafe_allow_html=True)
 
     with col_features:
+        # Features Panel - SUPER SIMPLE (PASTI WORK)
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.08);
@@ -908,6 +810,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Gunakan Streamlit native components
         st.markdown("**🔬 Content Extraction**")
         st.markdown("- Full text analysis  \n- Key concept identification")
         
@@ -917,7 +820,7 @@ with tabs[1]:
         st.markdown("**🤖 AI Insights**")
         st.markdown("- Summary generation  \n- Relevance scoring  \n- Trend analysis")
 
-    # File Processing
+    # File Processing Section
     if uploaded_file:
         st.markdown("""
         <div style="
@@ -931,6 +834,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # File Info
         file_details = {
             "Filename": uploaded_file.name,
             "File size": f"{uploaded_file.size / 1024:.1f} KB",
@@ -960,7 +864,9 @@ with tabs[1]:
             ), unsafe_allow_html=True)
         
         with col_status:
+            # Processing Animation
             with st.spinner("🔍 Extracting content and analyzing..."):
+                # Extract text dari file
                 if uploaded_file.type == "application/pdf":
                     report_text = extract_text_from_pdf(uploaded_file)
                 else:
@@ -968,7 +874,7 @@ with tabs[1]:
             
             st.success("✅ Analysis completed!")
         
-        # Extracted Content
+        # Extracted Content Section
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.05);
@@ -980,6 +886,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Text preview dengan tabs
         tab_preview, tab_stats = st.tabs(["📝 Content Preview", "📊 Text Statistics"])
         
         with tab_preview:
@@ -999,7 +906,7 @@ with tabs[1]:
             with col3:
                 st.metric("Estimated Pages", f"{len(report_text) // 1500 + 1}")
         
-        # AI Feedback
+        # AI Feedback Section
         st.markdown("""
         <div style="
             background: rgba(0, 245, 255, 0.1);
@@ -1012,9 +919,9 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # AI Comment dengan enhanced display
         with st.spinner("🔬 Comparing with NASA publications..."):
-            corpus_texts = df["abstract"].fillna("").tolist() if 'abstract' in df.columns else [""]
-            comment = ai_comment_on_report(report_text, corpus_texts)
+            comment = ai_comment_on_report(report_text, df["abstract"].fillna("").tolist())
         
         st.markdown(f"""
         <div style="
@@ -1028,6 +935,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Additional Analysis Suggestions
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.03);
@@ -1045,6 +953,7 @@ with tabs[1]:
         """, unsafe_allow_html=True)
 
     else:
+        # Placeholder ketika tiada file diupload
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.02);
@@ -1061,40 +970,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
 
-# Close main content div
-st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================
-# 🔑 Sidebar API Setup
-# =========================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔑 Free API Setup")
-
-with st.sidebar.expander("Setup Free AI APIs", expanded=True):
-    st.markdown("""
-    **Dapatkan FREE Hugging Face Token:**
-    
-    1. Daftar di [huggingface.co](https://huggingface.co)
-    2. Pergi ke [Settings → Access Tokens](https://huggingface.co/settings/tokens)
-    3. Create token dengan permission **Write**
-    """)
-    
-    hf_key = st.text_input("Hugging Face Token:", type="password", key="hf_token_input")
-    
-    if hf_key:
-        st.session_state.hf_api_key = hf_key
-        os.environ["HF_API_KEY"] = hf_key
-        st.success("✅ HF Token saved! Now try 'Summarize Article'")
-    
-    if hasattr(st.session_state, 'hf_api_key') and st.session_state.hf_api_key:
-        st.info(f"🔑 Token set: {st.session_state.hf_api_key[:10]}...")
-
-# Test AI Services
-test_ai_services()
-
-# =========================
-# 🌐 Sidebar Graph Section
-# =========================
+# --- Sidebar Graph ---
 st.sidebar.markdown("""
 <div style="
     background: linear-gradient(135deg, #0d3b66 0%, #1e6ea7 50%, #2a9d8f 100%);
@@ -1108,24 +984,20 @@ st.sidebar.markdown("""
     <p style="color: #e0f7fa; text-align: center; font-size: 0.9em;">Explore connections between space research articles</p>
 </div>
 """, unsafe_allow_html=True)
-
+# ✅ BUTTONS BARU - LETAK DI SINI, SELEPAS HEADER
 col1, col2 = st.sidebar.columns(2)
 
 with col1:
     if st.button("🔗 **Similarity Graph**", use_container_width=True, help="Show how articles are related by content similarity"):
-        with st.spinner("🔄 Creating similarity graph..."):
-            html_content = build_similarity_graph(df, max_nodes=20)
-            st.components.v1.html(html_content, height=600, scrolling=True)
-            st.sidebar.success("✅ Similarity Graph generated!")
+        st.session_state.show_similarity_graph = True
+        st.session_state.show_knowledge_graph = False
 
 with col2:
     if st.button("🧩 **Knowledge Graph**", use_container_width=True, help="Visualize keywords and concepts from articles"):
-        with st.spinner("🔄 Creating knowledge graph..."):
-            html_content = build_knowledge_graph(df, max_nodes=20)
-            st.components.v1.html(html_content, height=600, scrolling=True)
-            st.sidebar.success("✅ Knowledge Graph generated!")
+        st.session_state.show_knowledge_graph = True
+        st.session_state.show_similarity_graph = False
 
-# Additional NASA-themed elements
+# Additional NASA-themed elements  ← ✅ HANYA SATU!
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
 <div style="
@@ -1143,11 +1015,62 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# NASA Stats
+# NASA Stats  ← ✅ HANYA SATU!
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
 <div style="text-align: center;">
-    <p style="color: #00f5ff; font-size: 2em; margin: 0; text-shadow: 0 0 10px #00f5ff;">{}</p>
+    <p style="color: #00f5ff; font-size: 2em; margin: 0; text-shadow: 0 0 10px #00f5ff;">608</p>
     <p style="color: #e0f7fa; font-size: 0.9em; margin: 0;">Space Publications</p>
 </div>
-""".format(len(df)), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+# =========================
+# 🌐 GRAPH DISPLAY AREA - ONLINE VERSION
+# =========================
+st.markdown("---")
+
+# Graph Display Section
+if st.session_state.get('show_similarity_graph'):
+    st.markdown("### 🔗 Similarity Graph - Article Relationships")
+    st.info("🖱️ **Tips**: Drag nodes to explore • Scroll to zoom • Click nodes to see connections")
+    with st.spinner("🔄 Generating similarity graph... This may take a few seconds"):
+        display_similarity_graph_online(df)
+        
+elif st.session_state.get('show_knowledge_graph'):
+    st.markdown("### 🧩 Knowledge Graph - Keywords & Concepts") 
+    st.info("🖱️ **Tips**: Blue nodes = Articles • Green nodes = Keywords • Drag to explore relationships")
+    with st.spinner("🔄 Generating knowledge graph... This may take a few seconds"):
+        display_knowledge_graph_online(df)
+else:
+    # Default message - hanya show pertama kali
+    st.markdown("""
+    <div style="
+        background: rgba(255, 255, 255, 0.05);
+        padding: 60px 20px;
+        border-radius: 15px;
+        border: 2px dashed rgba(0, 245, 255, 0.3);
+        text-align: center;
+        margin: 20px 0;
+    ">
+        <h3 style="color: #00f5ff;">🌌 Graph Visualization Ready</h3>
+        <p style="color: #e0f7fa; font-size: 1.1em;">
+            Click on either graph button in the sidebar to visualize NASA research relationships
+        </p>
+        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
+            <div style="text-align: center;">
+                <div style="color: orange; font-size: 2em;">🔗</div>
+                <p style="color: #e0f7fa; margin: 5px 0;">Similarity Graph<br><small>Article connections</small></p>
+            </div>
+            <div style="text-align: center;">
+                <div style="color: lightblue; font-size: 2em;">🧩</div>
+                <p style="color: #e0f7fa; margin: 5px 0;">Knowledge Graph<br><small>Keywords & concepts</small></p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =========================
+# 🏁 END OF APP
+# =========================
+st.markdown('</div>', unsafe_allow_html=True)  # Tutup main-content div
+
+
