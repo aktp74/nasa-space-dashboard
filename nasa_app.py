@@ -8,7 +8,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
 import webbrowser
-import PyPDF2
+import PyPDF
 import docx
 import streamlit.components.v1 as components 
 
@@ -209,7 +209,7 @@ def fallback_summarize(text, mode="single"):
 # 📑 PDF/DOCX Reader + AI Feedback
 # =========================
 def extract_text_from_pdf(file):
-    reader = PyPDF2.PdfReader(file)
+    reader = PyPDF.PdfReader(file)
     text = ""
     for page in reader.pages:
         text += page.extract_text() + "\n"
